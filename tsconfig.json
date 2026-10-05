@@ -18,10 +18,12 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
+    "allowImportingTsExtensions": true,
     "jsx": "react-jsx"
   },
   "include": [
-    "src"
+    "src",
+    "scripts"
   ],
   "references": []
 }

@@ -1,102 +1,113 @@
+import { useState } from "react";
 import "./styles.css";
+import { useWorkshop } from "./domain/runtime.ts";
+import { selectMetrics } from "./domain/store.ts";
+import { CarpetMap } from "./components/CarpetMap.tsx";
+import { MaterialBoard } from "./components/MaterialBoard.tsx";
+import { ZonePanel } from "./components/ZonePanel.tsx";
+import { QueuePanel } from "./components/QueuePanel.tsx";
+import { ProgressPanel } from "./components/ProgressPanel.tsx";
+import { LogPanel } from "./components/LogPanel.tsx";
+import { MaterialForm } from "./components/MaterialForm.tsx";
 
-const project = {
-  "sourceNo": 2,
-  "id": "hxyfront-62009",
-  "port": 62009,
-  "title": "地毯修复纹样档案",
-  "domain": "手工地毯修复",
-  "prompt": "做一个给手工地毯修复工作室使用的纹样与修复档案前端项目，可以记录地毯产地、年代、结密度、材质、染色类型、破损区域、补线颜色和修复工序。页面需要有纹样局部标记图、修复前后记录、材料色卡、工序进度和按产地筛选的档案列表。",
-  "palette": [
-    "#7c2d12",
-    "#b45309",
-    "#0f766e"
-  ],
-  "metrics": [
-    "待修复",
-    "纹样档案",
-    "色卡数量",
-    "完工率"
-  ],
-  "filters": [
-    "波斯",
-    "安纳托利亚",
-    "高加索",
-    "藏毯"
-  ],
-  "fields": [
-    "地毯产地",
-    "年代",
-    "结密度",
-    "材质",
-    "染色类型",
-    "破损区域"
-  ],
-  "records": [
-    [
-      "CAR-092",
-      "波斯",
-      "羊毛，约1960s",
-      "边缘磨损待补线"
-    ],
-    [
-      "CAR-117",
-      "安纳托利亚",
-      "植物染，结密度42",
-      "中心纹样缺口"
-    ],
-    [
-      "CAR-138",
-      "藏毯",
-      "局部褪色",
-      "需匹配靛蓝色卡"
-    ]
-  ]
-};
+const CARPET_COLORS = ["#7c2d12", "#0f766e", "#b45309", "#6d28d9"];
 
 function App() {
+  const state = useWorkshop();
+  const [originFilter, setOriginFilter] = useState("全部");
+  const [carpetId, setCarpetId] = useState(state.carpets[0].id);
+  const [zoneId, setZoneId] = useState<string | null>(null);
+
+  const origins = ["全部", ...Array.from(new Set(state.carpets.map((c) => c.origin)))];
+  const visibleCarpets = state.carpets.filter((c) => originFilter === "全部" || c.origin === originFilter);
+  const carpet = state.carpets.find((c) => c.id === carpetId) ?? visibleCarpets[0] ?? state.carpets[0];
+  const carpetZones = state.zones.filter((z) => z.carpetId === carpet.id);
+  const metrics = selectMetrics(state);
+
+  const colorOf = (zid: string) => {
+    const zone = state.zones.find((z) => z.id === zid);
+    const idx = state.carpets.findIndex((c) => c.id === zone?.carpetId);
+    return CARPET_COLORS[Math.max(0, idx) % CARPET_COLORS.length];
+  };
+  const zoneName = (zid: string) => {
+    const z = state.zones.find((x) => x.id === zid);
+    return z ? `${z.id} ${z.label}` : zid;
+  };
+
   return (
     <main className="app">
       <section className="hero">
-        <p>{project.id} · 源提示词{project.sourceNo} · Port {project.port}</p>
-        <h1>{project.title}</h1>
-        <span>{project.prompt}</span>
+        <p>hxyfront-62009 · 手工地毯修复工作室</p>
+        <h1>补块套裁排布台</h1>
+        <span>
+          破损登记、旧毯料与补块排布一条线：登记轮廓与绒头方向，选料避开已有补块并留拼缝余量，方向跟着原毯走（反了灯下泛白）。
+          轮廓或方向一改，原位置立刻失效重算；两人同时提交一块毯料，后到者看到冲突位置；容量不够的补块排队等料；
+          老档案缺方向记录先挂待确认，排布与进度一起更新。
+        </span>
       </section>
 
       <section className="metrics">
-        {project.metrics.map((metric: string, index: number) => (
-          <article key={metric}>
-            <small>{metric}</small>
-            <strong>{[28, 6, 14, 91][index] ?? 10}</strong>
-          </article>
-        ))}
+        <article>
+          <small>缺方向待确认</small>
+          <strong>{metrics.pendingZones}</strong>
+        </article>
+        <article>
+          <small>排队等料</small>
+          <strong>{metrics.queued}</strong>
+        </article>
+        <article>
+          <small>已排布补块</small>
+          <strong>{metrics.placed}</strong>
+        </article>
+        <article>
+          <small>排布完工率</small>
+          <strong>{metrics.donePct}%</strong>
+        </article>
       </section>
 
       <section className="workspace">
         <aside className="panel">
-          <h2>{project.domain}分类</h2>
+          <h2>纹样档案</h2>
           <div className="chips">
-            {project.filters.map((item: string) => (
-              <button key={item}>{item}</button>
+            {origins.map((o) => (
+              <button
+                key={o}
+                className={o === originFilter ? "chip-active" : ""}
+                onClick={() => setOriginFilter(o)}
+              >
+                {o}
+              </button>
+            ))}
+          </div>
+          <div className="carpet-list">
+            {visibleCarpets.map((c) => (
+              <button
+                key={c.id}
+                className={`carpet-item ${c.id === carpet.id ? "is-active" : ""}`}
+                onClick={() => setCarpetId(c.id)}
+              >
+                <b>{c.id}</b> {c.name}
+                <small>
+                  {c.origin} · {c.era} · {c.knotDensity} · {c.material} · {c.dye}
+                </small>
+              </button>
             ))}
           </div>
         </aside>
 
-        <section className="panel form-panel">
+        <section className="panel">
           <div className="heading">
             <div>
-              <p>专业字段</p>
-              <h2>新增记录</h2>
+              <p>破损登记</p>
+              <h2>
+                {carpet.id} {carpet.name}
+              </h2>
             </div>
-            <button className="primary">保存记录</button>
+            <span className="hint">绒头方向：0°=倒向毯尾（下），顺时针计</span>
           </div>
-          <div className="field-grid">
-            {project.fields.map((field: string) => (
-              <label key={field}>
-                <span>{field}</span>
-                <input placeholder={"填写" + field} />
-              </label>
-            ))}
+          <div className="register-grid">
+            <CarpetMap carpet={carpet} zones={carpetZones} selectedId={zoneId} onSelect={setZoneId} />
+            <ZonePanel zones={carpetZones} selectedId={zoneId} onSelect={setZoneId} />
           </div>
         </section>
       </section>
@@ -104,22 +115,53 @@ function App() {
       <section className="panel">
         <div className="heading">
           <div>
-            <p>近期记录</p>
-            <h2>工作台摘要</h2>
+            <p>选料套裁</p>
+            <h2>毯料排布图</h2>
           </div>
-          <button>导出CSV</button>
+          <span className="hint">
+            灰斜纹=已有补块（需避开）· 彩块=已排补块（箭头为绒头方向）· 青虚线=暂存方案 · 红虚线=冲突位置
+          </span>
         </div>
-        <div className="records">
-          {project.records.map((record: string[], index: number) => (
-            <article key={record.join("-")}>
-              <b>{String(index + 1).padStart(2, "0")}</b>
-              <div>
-                <h3>{record[0]}</h3>
-                <p>{record.slice(1).join(" · ")}</p>
-              </div>
-            </article>
+        <div className="boards">
+          {state.materials.map((m) => (
+            <MaterialBoard
+              key={`${m.id}:v${m.version}`}
+              material={m}
+              patches={state.patches.filter((p) => p.status === "placed" && p.placement?.materialId === m.id)}
+              staged={state.staged}
+              conflicts={state.lastSubmit && !state.lastSubmit.ok && state.lastSubmit.materialId === m.id ? state.lastSubmit.conflicts : []}
+              colorOf={colorOf}
+              zoneName={zoneName}
+            />
           ))}
         </div>
+        <details className="intake">
+          <summary>新毯料入库（入库后自动排空等料队列）</summary>
+          <MaterialForm origins={origins.filter((o) => o !== "全部")} />
+        </details>
+      </section>
+
+      <section className="workspace bottom">
+        <section className="panel">
+          <div className="heading">
+            <div>
+              <p>容量不够的补块</p>
+              <h2>排队等料</h2>
+            </div>
+          </div>
+          <QueuePanel state={state} zoneName={zoneName} />
+        </section>
+
+        <section className="panel">
+          <div className="heading">
+            <div>
+              <p>排布与进度一起更新</p>
+              <h2>进度与台账动态</h2>
+            </div>
+          </div>
+          <ProgressPanel state={state} />
+          <LogPanel state={state} />
+        </section>
       </section>
     </main>
   );
